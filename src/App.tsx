@@ -35,7 +35,9 @@ export default function App() {
   const api = useMemo(() => createCardDuelApi(client), [client]);
 
   function notify(kind: Toast["kind"], message: string) {
-    const toast = { id: crypto.randomUUID(), kind, message };
+    // crypto.randomUUID is unavailable on plain HTTP (non-secure context), so
+    // use a context-independent id to avoid crashing every toast on the LAN.
+    const toast = { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, kind, message };
     setToasts((items) => [...items, toast]);
     window.setTimeout(() => setToasts((items) => items.filter((item) => item.id !== toast.id)), 4500);
   }
@@ -68,9 +70,10 @@ export default function App() {
 }
 
 function ConnectionBar({ apiUrl, setApiUrl, auth, setAuth, ctx }: { apiUrl: string; setApiUrl: (url: string) => void; auth: AuthResponse | null; setAuth: (auth: AuthResponse | null) => void; ctx: StudioContext }) {
-  const [email, setEmail] = useState("admin@cardduel.local");
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("password");
+  // Prefilled seeded credentials so login is one click on the LAN admin.
+  const [email, setEmail] = useState("playerone@flippy.com");
+  const [username, setUsername] = useState("PlayerOne");
+  const [password, setPassword] = useState("123456");
   const [mode, setMode] = useState<"login" | "register">("login");
   const [loading, setLoading] = useState(false);
 

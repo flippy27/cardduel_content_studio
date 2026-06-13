@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import type { StudioContext } from "../App";
 import { PageHeader } from "../components/Layout";
-import { DragSource, DropZone } from "../components/DropZone";
+import { DropZone } from "../components/DropZone";
+import { CardFilterGrid } from "../components/CardFilterGrid";
 import { Badge, Button, Card, EmptyState, Field, Input } from "../components/ui";
 import { ApiError } from "../api/http";
 import type { CardDefinitionDto } from "../domain/types";
-import { CARD_FACTIONS, CARD_RARITIES, labelFor, slugify } from "../domain/constants";
+import { slugify } from "../domain/constants";
 
 export function DeckBuilder({ ctx }: { ctx: StudioContext }) {
   const [cards, setCards] = useState<CardDefinitionDto[]>([]);
   const [deckId, setDeckId] = useState("starter_custom");
   const [displayName, setDisplayName] = useState("Starter Custom");
   const [deck, setDeck] = useState<string[]>([]);
-  const [filter, setFilter] = useState("");
   const [saving, setSaving] = useState(false);
 
   async function load() {
@@ -20,7 +20,6 @@ export function DeckBuilder({ ctx }: { ctx: StudioContext }) {
   }
   useEffect(() => { void load(); }, []);
 
-  const filtered = useMemo(() => cards.filter((card) => `${card.displayName} ${card.cardId}`.toLowerCase().includes(filter.toLowerCase())), [cards, filter]);
   const counts = useMemo(() => deck.reduce<Record<string, number>>((acc, id) => ({ ...acc, [id]: (acc[id] ?? 0) + 1 }), {}), [deck]);
   const isValid = deck.length >= 20 && deck.length <= 30 && Object.values(counts).every((count) => count <= 3);
 
@@ -47,15 +46,11 @@ export function DeckBuilder({ ctx }: { ctx: StudioContext }) {
   }
 
   return <>
-    <PageHeader title="Deck Builder" eyebrow="Drag & drop" description="Arrastra cartas al deck. El contador te marca reglas antes de llamar al PUT /api/v1/decks." actions={<Button onClick={load}>Refrescar</Button>} />
-    <div className="split-grid">
+    <PageHeader title="Deck Builder" eyebrow="Drag & drop" description="Filtra el catálogo, arrastra (o haz click) en una carta para añadirla. El contador valida reglas antes del PUT /api/v1/decks." actions={<Button onClick={load}>Refrescar</Button>} />
+    <div className="split-grid wide-left">
       <Card>
-        <div className="section-heading"><h2>Cartas disponibles</h2><Input placeholder="Buscar carta..." value={filter} onChange={(e) => setFilter(e.target.value)} /></div>
-        <div className="card-list compact-scroll">
-          {filtered.map((card) => <DragSource key={card.cardId} type="cardduel/card" value={card.cardId} className="catalog-card drag-card">
-            <strong>{card.displayName}</strong><code>{card.cardId}</code><span>{labelFor(CARD_FACTIONS, card.cardFaction)} · {labelFor(CARD_RARITIES, card.cardRarity)} · {card.manaCost} mana</span>
-          </DragSource>)}
-        </div>
+        <h2>Cartas disponibles</h2>
+        <CardFilterGrid cards={cards} onPick={addCard} counts={counts} pickHint="Click o arrastra para añadir al deck" />
       </Card>
       <Card>
         <h2>Deck actual</h2>
@@ -70,14 +65,14 @@ export function DeckBuilder({ ctx }: { ctx: StudioContext }) {
         </div>
         <DropZone accept="cardduel/card" onDropValue={addCard} className="deck-drop">
           <strong>Suelta cartas aquí</strong>
-          <span>También puedes hacer click en eliminar por cada copia.</span>
+          <span>También puedes hacer click en una carta para añadirla.</span>
         </DropZone>
         <div className="deck-list compact-scroll">
           {deck.map((cardId, index) => {
             const card = cards.find((item) => item.cardId === cardId);
-            return <div key={`${cardId}-${index}`} className="deck-entry"><span>{index + 1}</span><strong>{card?.displayName ?? cardId}</strong><code>{cardId}</code><Button variant="ghost" onClick={() => removeAt(index)}>Quitar</Button></div>;
+            return <div key={`${cardId}-${index}`} className="deck-entry"><span>{index + 1}</span><strong>{card?.displayName ?? cardId}</strong><code>{cardId}</code><Button variant="ghost" size="sm" onClick={() => removeAt(index)}>Quitar</Button></div>;
           })}
-          {!deck.length ? <EmptyState title="Deck vacío" body="Arrastra cartas desde la izquierda." /> : null}
+          {!deck.length ? <EmptyState title="Deck vacío" body="Arrastra o haz click en cartas desde la izquierda." /> : null}
         </div>
         <div className="actions-right"><Button onClick={save} disabled={!isValid || saving}>{saving ? "Guardando..." : "Guardar deck"}</Button></div>
       </Card>

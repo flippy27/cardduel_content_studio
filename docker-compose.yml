@@ -8,3 +8,7 @@ services:
       - "5173:80"
     environment:
       - TZ=America/Santiago
+      # Upstream for the nginx /api + /hubs proxy. Local default targets the
+      # CardDuel server running on the host (Docker Desktop). The prod overlay
+      # overrides this with the Pi's published port.
+      - API_UPSTREAM=${API_UPSTREAM:-host.docker.internal:5000}

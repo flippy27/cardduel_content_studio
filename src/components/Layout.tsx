@@ -1,4 +1,4 @@
-import { Activity, Boxes, Brush, Database, Hammer, Library, LogOut, PackagePlus, ScrollText, ShieldCheck, Sparkles } from "lucide-react";
+import { Activity, Boxes, Database, Hammer, Library, LogOut, PackagePlus, ScrollText, ShieldCheck, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 import type { AuthResponse } from "../domain/types";
 import { Button } from "./ui";
@@ -11,7 +11,6 @@ const nav = [
   { key: "abilities", label: "Abilities", icon: ShieldCheck },
   { key: "decks", label: "Deck Builder", icon: Boxes },
   { key: "crafting", label: "Crafting", icon: Hammer },
-  { key: "visuals", label: "Visual Profiles", icon: Brush },
   { key: "inventory", label: "Inventory", icon: PackagePlus },
   { key: "rulesets", label: "Rulesets", icon: ScrollText },
   { key: "schema", label: "Schema", icon: Database }

@@ -1,0 +1,19 @@
+# Production overlay for the Raspberry Pi. Use together with the base file:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Differences from local dev:
+#   - VITE_API_BASE_URL="/" bakes a *same-origin* API base into the bundle, so
+#     the browser calls /api/v1/... on whatever host it opened. nginx proxies
+#     those to the CardDuel server -> no CORS anywhere.
+#   - API_UPSTREAM points nginx at the CardDuel server's published port on the Pi.
+#   - Published on host port 5174 (80 is taken by the notes/Caddy stack).
+services:
+  cardduel-content-studio:
+    build:
+      args:
+        VITE_API_BASE_URL: "/"
+    ports:
+      - "5174:80"
+    environment:
+      - TZ=America/Santiago
+      - API_UPSTREAM=192.168.1.87:5000

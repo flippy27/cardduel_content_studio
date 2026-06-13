@@ -7,8 +7,8 @@ type DropZoneProps = {
   className?: string;
 };
 
-export function DragSource({ type, value, children, className = "" }: { type: string; value: string; children: ReactNode; className?: string }) {
-  return <div className={`drag-source ${className}`} draggable onDragStart={(event) => {
+export function DragSource({ type, value, children, className = "", onClick, title }: { type: string; value: string; children: ReactNode; className?: string; onClick?: () => void; title?: string }) {
+  return <div className={`drag-source ${className}`} draggable title={title} onClick={onClick} onDragStart={(event) => {
     event.dataTransfer.effectAllowed = "copyMove";
     event.dataTransfer.setData(type, value);
   }}>{children}</div>;

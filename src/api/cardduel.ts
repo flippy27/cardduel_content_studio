@@ -59,6 +59,7 @@ export function createCardDuelApi(client: ApiClient) {
 
     items: () => client.get<ItemTypeDto[]>("/api/v1/items"),
     inventory: (userId: string) => client.get<PlayerInventoryDto>(`/api/v1/players/${encodeURIComponent(userId)}/inventory`),
+    playerCards: (userId: string) => client.get<{ userId: string; totalCards: number; cards: Array<{ id: string; cardId: string; displayName: string; cardRarity: number; cardFaction: number; cardType: number; acquiredFrom: string; acquiredAt: string }> }>(`/api/v1/players/${encodeURIComponent(userId)}/cards`),
     grantItem: (userId: string, body: { itemTypeKey: string; quantity: number; reason?: string | null }) => client.post(`/api/v1/players/${encodeURIComponent(userId)}/inventory/grant`, body),
     grantPlayerCard: (userId: string, body: { cardId: string; acquiredFrom?: string }) => client.post(`/api/v1/players/${encodeURIComponent(userId)}/cards/grant`, body),
 

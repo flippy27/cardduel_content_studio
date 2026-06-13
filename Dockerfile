@@ -16,8 +16,10 @@ ENV VITE_PROXY_API=$VITE_PROXY_API
 RUN pnpm build
 
 FROM nginx:1.27-alpine AS runtime
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Template (not a static conf): the entrypoint runs envsubst at container start
+# and writes /etc/nginx/conf.d/default.conf, injecting ${API_UPSTREAM}.
+COPY nginx.conf /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 CMD wget -qO- http://localhost/ >/dev/null || exit 1
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 CMD wget -qO- http://127.0.0.1/ >/dev/null || exit 1
 CMD ["nginx", "-g", "daemon off;"]

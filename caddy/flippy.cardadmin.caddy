@@ -1,0 +1,8 @@
+# CardDuel Content Studio admin — served on :80 by the shared edge Caddy.
+# This snippet is OWNED by the cardduel_content_studio repo and shipped by
+# deploy.ps1 / deploy.sh to the Pi's repo-independent edge dir (~/edge/sites/),
+# which the edge Caddy imports. The shared edge framework lives outside any app
+# repo; each app contributes only its own route here.
+http://flippy.cardadmin {
+	reverse_proxy 192.168.1.87:5174
+}

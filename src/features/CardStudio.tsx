@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { StudioContext } from "../App";
 import { PageHeader } from "../components/Layout";
 import { DragSource, DropZone } from "../components/DropZone";
-import { Badge, Button, Card, EmptyState, Field, Input, Select, Textarea } from "../components/ui";
+import { CardFilterGrid } from "../components/CardFilterGrid";
+import { Badge, Button, Card, Field, FormGrid, Input, SectionHeading, Select, Textarea } from "../components/ui";
 import { ApiError } from "../api/http";
-import type { AbilityAuthoringDto, AuthoringLookups, CardDefinitionDto, CardVisualProfileTemplateDto, CreateAbilityRequest, CreateCardRequest } from "../domain/types";
+import type { AbilityAuthoringDto, AuthoringLookups, CardDefinitionDto, CreateAbilityRequest, CreateCardRequest } from "../domain/types";
 import { ALLOWED_ROWS, CARD_FACTIONS, CARD_RARITIES, CARD_TYPES, DEFAULT_ATTACK_SELECTORS, labelFor, slugify, UNIT_TYPES } from "../domain/constants";
 
 const starterCard: CreateCardRequest = {
@@ -31,165 +32,138 @@ export function CardStudio({ ctx }: { ctx: StudioContext }) {
   const [cards, setCards] = useState<CardDefinitionDto[]>([]);
   const [abilities, setAbilities] = useState<AbilityAuthoringDto[]>([]);
   const [lookups, setLookups] = useState<AuthoringLookups | null>(null);
-  const [templates, setTemplates] = useState<CardVisualProfileTemplateDto[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<CreateCardRequest>(starterCard);
   const [abilityDrafts, setAbilityDrafts] = useState<CreateAbilityRequest[]>([]);
-  const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
-  const selected = cards.find((card) => card.cardId === selectedId) ?? null;
+  const selected = cards.find((card) => card.cardId === editingId) ?? null;
 
   async function load() {
-    try {
-      const [cardResult, abilityResult, lookupResult, templateResult] = await Promise.all([ctx.api.cards(), ctx.api.abilities(), ctx.api.lookups(), ctx.api.visualTemplates()]);
-      setCards(cardResult);
-      setAbilities(abilityResult);
-      setLookups(lookupResult);
-      setTemplates(templateResult);
-    } catch (error) {
-      ctx.notify("error", error instanceof ApiError ? error.message : "No pude cargar Card Studio.");
-    }
+    // Load each resource independently so one failing endpoint (e.g. visual
+    // templates 404) doesn't wipe the card catalog.
+    const [cardR, abilityR, lookupR] = await Promise.allSettled([ctx.api.cards(), ctx.api.abilities(), ctx.api.lookups()]);
+    if (cardR.status === "fulfilled") setCards(cardR.value);
+    else ctx.notify("error", cardR.reason instanceof ApiError ? cardR.reason.message : "No pude cargar el catálogo de cartas.");
+    if (abilityR.status === "fulfilled") setAbilities(abilityR.value);
+    if (lookupR.status === "fulfilled") setLookups(lookupR.value);
   }
-
   useEffect(() => { void load(); }, []);
-
-  const filteredCards = useMemo(() => cards.filter((card) => `${card.displayName} ${card.cardId}`.toLowerCase().includes(query.toLowerCase())), [cards, query]);
 
   function patch<K extends keyof CreateCardRequest>(key: K, value: CreateCardRequest[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
+  function newCard() {
+    setEditingId(null);
+    setDraft(starterCard);
+    setAbilityDrafts([]);
+  }
+
+  function loadForEdit(cardId: string) {
+    const c = cards.find((card) => card.cardId === cardId);
+    if (!c) return;
+    setEditingId(c.cardId);
+    setAbilityDrafts([]);
+    setDraft({
+      cardId: c.cardId, displayName: c.displayName, description: c.description, manaCost: c.manaCost,
+      attack: c.attack, health: c.health, armor: c.armor, cardType: c.cardType, cardRarity: c.cardRarity,
+      cardFaction: c.cardFaction, unitType: c.unitType ?? 0, allowedRow: c.allowedRow,
+      defaultAttackSelector: c.defaultAttackSelector, turnsUntilCanAttack: c.turnsUntilCanAttack,
+      isLimited: c.isLimited, battlePresentation: c.battlePresentation ?? starterCard.battlePresentation, visualProfiles: []
+    });
+  }
+
   function abilityToCreateRequest(ability: AbilityAuthoringDto): CreateAbilityRequest {
     return {
-      abilityId: ability.abilityId,
-      displayName: ability.displayName,
-      description: ability.description,
-      skillType: ability.skillType,
-      triggerKind: ability.triggerKind,
-      targetSelectorKind: ability.targetSelectorKind,
-      animationCueId: ability.animationCueId,
-      iconAssetRef: ability.iconAssetRef,
-      statusIconAssetRef: ability.statusIconAssetRef,
-      vfxCueId: ability.vfxCueId,
-      audioCueId: ability.audioCueId,
-      uiColorHex: ability.uiColorHex,
-      tooltipSummary: ability.tooltipSummary,
-      conditionsJson: ability.conditionsJson ?? "{}",
-      metadataJson: ability.metadataJson ?? "{}",
+      abilityId: ability.abilityId, displayName: ability.displayName, description: ability.description,
+      skillType: ability.skillType, triggerKind: ability.triggerKind, targetSelectorKind: ability.targetSelectorKind,
+      animationCueId: ability.animationCueId, iconAssetRef: ability.iconAssetRef, statusIconAssetRef: ability.statusIconAssetRef,
+      vfxCueId: ability.vfxCueId, audioCueId: ability.audioCueId, uiColorHex: ability.uiColorHex, tooltipSummary: ability.tooltipSummary,
+      conditionsJson: ability.conditionsJson ?? "{}", metadataJson: ability.metadataJson ?? "{}",
       effects: ability.effects.map((effect, sequence) => ({
-        effectKind: effect.effectKind,
-        amount: effect.amount,
-        secondaryAmount: effect.secondaryAmount,
-        durationTurns: effect.durationTurns,
-        targetSelectorKindOverride: effect.targetSelectorKindOverride,
-        sequence,
-        metadataJson: effect.metadataJson ?? "{}"
+        effectKind: effect.effectKind, amount: effect.amount, secondaryAmount: effect.secondaryAmount,
+        durationTurns: effect.durationTurns, targetSelectorKindOverride: effect.targetSelectorKindOverride,
+        sequence, metadataJson: effect.metadataJson ?? "{}"
       }))
     };
   }
 
-  function dropAbility(abilityId: string) {
+  async function onAbilityDrop(abilityId: string) {
     const ability = abilities.find((item) => item.abilityId === abilityId);
     if (!ability) return;
-    if (abilityDrafts.some((item) => item.abilityId === abilityId)) {
-      ctx.notify("info", "Esa ability ya está en el draft.");
+    if (editingId && selected) {
+      // Edit mode: attach directly to the existing card.
+      if (!ctx.requireAuth()) return;
+      if ((selected.abilities ?? []).some((a) => a.abilityId === abilityId)) return ctx.notify("info", "La carta ya tiene esa ability.");
+      if ((selected.abilities ?? []).length >= 3) return ctx.notify("error", "Máximo 3 abilities por carta.");
+      try {
+        await ctx.api.addCardAbility(selected.cardId, abilityToCreateRequest(ability));
+        ctx.notify("success", "Ability asociada.");
+        await load();
+      } catch (error) { ctx.notify("error", error instanceof ApiError ? error.message : "No pude asociar la ability."); }
       return;
     }
-    if (abilityDrafts.length >= 3) {
-      ctx.notify("error", "La regla pedida es máximo 3 abilities por carta.");
-      return;
-    }
+    // Create mode: stage locally.
+    if (abilityDrafts.some((item) => item.abilityId === abilityId)) return ctx.notify("info", "Esa ability ya está en el draft.");
+    if (abilityDrafts.length >= 3) return ctx.notify("error", "Máximo 3 abilities por carta.");
     setAbilityDrafts((items) => [...items, abilityToCreateRequest(ability)]);
   }
 
-  function removeAbility(abilityId: string) {
-    setAbilityDrafts((items) => items.filter((item) => item.abilityId !== abilityId));
-  }
-
-  function addTemplate(profileKey: string) {
-    const template = templates.find((item) => item.profileKey === profileKey);
-    if (!template) return;
-    const exists = draft.visualProfiles?.some((profile) => profile.profileKey === template.profileKey);
-    if (exists) return;
-    patch("visualProfiles", [...(draft.visualProfiles ?? []), { profileKey: template.profileKey, displayName: template.displayName, isDefault: !(draft.visualProfiles?.length), layers: template.layers }]);
+  async function detachAbility(abilityId: string) {
+    if (editingId && selected) {
+      if (!ctx.requireAuth()) return;
+      try { await ctx.api.removeCardAbility(selected.cardId, abilityId); ctx.notify("success", "Ability quitada."); await load(); }
+      catch (error) { ctx.notify("error", error instanceof ApiError ? error.message : "No pude quitar la ability."); }
+    } else {
+      setAbilityDrafts((items) => items.filter((item) => item.abilityId !== abilityId));
+    }
   }
 
   async function saveCard() {
     if (!ctx.requireAuth()) return;
-    if (!draft.cardId || !draft.displayName) {
-      ctx.notify("error", "CardId y nombre son obligatorios.");
-      return;
-    }
+    if (!draft.cardId || !draft.displayName) return ctx.notify("error", "CardId y nombre son obligatorios.");
     setSaving(true);
+    const payload = { ...draft, unitType: draft.cardType === 0 ? draft.unitType : null };
     try {
-      const created = await ctx.api.createCard({ ...draft, unitType: draft.cardType === 0 ? draft.unitType : null });
-      for (const ability of abilityDrafts) {
-        await ctx.api.addCardAbility(created.cardId, ability);
+      if (editingId) {
+        await ctx.api.updateCard(editingId, payload);
+        ctx.notify("success", `Carta ${draft.displayName} actualizada.`);
+        await load();
+      } else {
+        const created = await ctx.api.createCard(payload);
+        for (const ability of abilityDrafts) await ctx.api.addCardAbility(created.cardId, ability);
+        ctx.notify("success", `Carta ${created.displayName} creada con ${abilityDrafts.length} abilities.`);
+        await load();
+        loadForEdit(created.cardId);
       }
-      ctx.notify("success", `Carta ${created.displayName} creada con ${abilityDrafts.length} abilities.`);
-      setDraft(starterCard);
-      setAbilityDrafts([]);
-      await load();
-      setSelectedId(created.cardId);
     } catch (error) {
-      ctx.notify("error", error instanceof ApiError ? error.message : "No pude crear la carta.");
-    } finally {
-      setSaving(false);
-    }
+      ctx.notify("error", error instanceof ApiError ? error.message : "No pude guardar la carta.");
+    } finally { setSaving(false); }
   }
 
-  async function attachToSelected(abilityId: string) {
-    if (!selected || !ctx.requireAuth()) return;
-    const ability = abilities.find((item) => item.abilityId === abilityId);
-    if (!ability) return;
-    if ((selected.abilities ?? []).some((item) => item.abilityId === ability.abilityId)) {
-      ctx.notify("info", "La carta ya tiene esa ability.");
-      return;
-    }
-    if ((selected.abilities ?? []).length >= 3) {
-      ctx.notify("error", "Máximo 3 abilities por carta.");
-      return;
-    }
-    try {
-      await ctx.api.addCardAbility(selected.cardId, abilityToCreateRequest(ability));
-      ctx.notify("success", "Ability asociada a la carta.");
-      await load();
-    } catch (error) {
-      ctx.notify("error", error instanceof ApiError ? error.message : "No pude asociar la ability.");
-    }
+  async function deleteCard() {
+    if (!editingId || !ctx.requireAuth()) return;
+    if (!window.confirm(`Eliminar ${editingId}?`)) return;
+    try { await ctx.api.deleteCard(editingId); ctx.notify("success", "Carta eliminada."); newCard(); await load(); }
+    catch (error) { ctx.notify("error", error instanceof ApiError ? error.message : "No pude eliminar la carta."); }
   }
 
-  async function deleteCard(cardId: string) {
-    if (!ctx.requireAuth()) return;
-    if (!window.confirm(`Eliminar ${cardId}?`)) return;
-    try {
-      await ctx.api.deleteCard(cardId);
-      ctx.notify("success", "Carta eliminada.");
-      if (selectedId === cardId) setSelectedId(null);
-      await load();
-    } catch (error) {
-      ctx.notify("error", error instanceof ApiError ? error.message : "No pude eliminar la carta.");
-    }
-  }
+  const shownAbilities = editingId && selected ? selected.abilities : abilityDrafts;
 
   return <>
-    <PageHeader title="Card Studio" eyebrow="Carta + abilities + visual profiles" description="Crea cartas de forma visual: defines stats, arrastras abilities reutilizables, aplicas templates visuales y mandas todo al backend en el orden correcto." actions={<Button onClick={load}>Refrescar</Button>} />
-    <div className="studio-grid">
-      <Card className="library-panel">
-        <div className="section-heading"><h2>Catálogo</h2><Input placeholder="Buscar carta..." value={query} onChange={(e) => setQuery(e.target.value)} /></div>
-        <div className="card-list compact-scroll">
-          {filteredCards.map((card) => <button key={card.cardId} className={selectedId === card.cardId ? "catalog-card active" : "catalog-card"} onClick={() => setSelectedId(card.cardId)}>
-            <strong>{card.displayName}</strong><code>{card.cardId}</code>
-            <span>{labelFor(CARD_TYPES, card.cardType)} · {labelFor(CARD_RARITIES, card.cardRarity)} · {card.abilities.length} abilities</span>
-          </button>)}
-        </div>
-      </Card>
+    <PageHeader title="Card Studio" eyebrow="Crear y editar cartas" description="Filtra el catálogo y haz click en una carta para editarla, o crea una nueva. Arrastra abilities reutilizables y aplica templates visuales." actions={<Button onClick={load}>Refrescar</Button>} />
 
-      <Card className="builder-panel">
-        <h2>Nueva carta</h2>
-        <div className="form-grid three">
+    <Card>
+      <SectionHeading title="Catálogo de cartas" sub="Click en una carta para editarla" actions={<Button size="sm" onClick={newCard}>+ Nueva carta</Button>} />
+      <CardFilterGrid cards={cards} onPick={loadForEdit} activeId={editingId} pickHint="Click para editar" />
+    </Card>
+
+    <div className="split-grid wide-left">
+      <Card>
+        <SectionHeading title={editingId ? `Editando: ${draft.displayName || editingId}` : "Nueva carta"} actions={editingId ? <Button size="sm" variant="ghost" onClick={newCard}>Cancelar edición</Button> : null} />
+        <FormGrid cols={3}>
           <Field label="Nombre"><Input value={draft.displayName} onChange={(e) => patch("displayName", e.target.value)} onBlur={() => !draft.cardId && patch("cardId", slugify(draft.displayName))} /></Field>
-          <Field label="Card ID"><Input value={draft.cardId} onChange={(e) => patch("cardId", slugify(e.target.value))} /></Field>
+          <Field label="Card ID"><Input value={draft.cardId} disabled={!!editingId} onChange={(e) => patch("cardId", slugify(e.target.value))} /></Field>
           <Field label="Facción"><Select value={draft.cardFaction} onChange={(e) => patch("cardFaction", Number(e.target.value))}>{CARD_FACTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</Select></Field>
           <Field label="Tipo"><Select value={draft.cardType} onChange={(e) => patch("cardType", Number(e.target.value))}>{CARD_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</Select></Field>
           <Field label="Rareza"><Select value={draft.cardRarity} onChange={(e) => patch("cardRarity", Number(e.target.value))}>{CARD_RARITIES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</Select></Field>
@@ -200,44 +174,28 @@ export function CardStudio({ ctx }: { ctx: StudioContext }) {
           <Field label="Armor"><Input type="number" min={0} max={10} value={draft.armor} onChange={(e) => patch("armor", Number(e.target.value))} /></Field>
           <Field label="Allowed row"><Select value={draft.allowedRow} onChange={(e) => patch("allowedRow", Number(e.target.value))}>{ALLOWED_ROWS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</Select></Field>
           <Field label="Target default"><Select value={draft.defaultAttackSelector} onChange={(e) => patch("defaultAttackSelector", Number(e.target.value))}>{DEFAULT_ATTACK_SELECTORS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</Select></Field>
-        </div>
+        </FormGrid>
         <Field label="Descripción"><Textarea rows={3} value={draft.description} onChange={(e) => patch("description", e.target.value)} /></Field>
-        <div className="form-grid two">
-          <Field label="Visual template"><Select value="" onChange={(e) => addTemplate(e.target.value)}><option value="">Agregar template...</option>{templates.map((template) => <option key={template.profileKey} value={template.profileKey}>{template.displayName}</option>)}</Select></Field>
-          <Field label="Delivery type"><Input value={draft.battlePresentation?.attackDeliveryType ?? ""} onChange={(e) => patch("battlePresentation", { ...draft.battlePresentation!, attackDeliveryType: e.target.value })} placeholder="projectile / melee / magic" /></Field>
-        </div>
-        <DropZone accept="cardduel/ability" onDropValue={dropAbility} className="ability-drop">
+        <Field label="Delivery type"><Input value={draft.battlePresentation?.attackDeliveryType ?? ""} onChange={(e) => patch("battlePresentation", { ...draft.battlePresentation!, attackDeliveryType: e.target.value })} placeholder="projectile / melee / magic" /></Field>
+        <DropZone accept="cardduel/ability" onDropValue={onAbilityDrop} className="ability-drop">
           <strong>Arrastra abilities aquí</strong>
-          <span>0 a 3 abilities por carta. Si la ability ya existe, el backend la reutiliza y solo crea la relación.</span>
-          <div className="attached-list">{abilityDrafts.map((ability) => <div key={ability.abilityId} className="attached-item"><span>{ability.displayName}</span><code>{ability.abilityId}</code><Button variant="ghost" onClick={() => removeAbility(ability.abilityId)}>Quitar</Button></div>)}</div>
+          <span>{editingId ? "Se asocian directamente a esta carta (máx 3)." : "0 a 3 abilities; se crean junto con la carta."}</span>
+          <div className="attached-list">{shownAbilities.map((ability) => <div key={ability.abilityId} className="attached-item"><span>{ability.displayName}</span><code>{ability.abilityId}</code><Button variant="ghost" size="sm" onClick={() => detachAbility(ability.abilityId)}>Quitar</Button></div>)}</div>
         </DropZone>
-        <div className="actions-right"><Button onClick={saveCard} disabled={saving}>{saving ? "Creando..." : "Crear carta completa"}</Button></div>
+        <div className="actions-right">
+          {editingId ? <Button variant="danger" onClick={deleteCard}>Eliminar</Button> : null}
+          <Button onClick={saveCard} disabled={saving}>{saving ? "Guardando..." : editingId ? "Guardar cambios" : "Crear carta"}</Button>
+        </div>
       </Card>
 
-      <Card className="preview-panel">
+      <Card>
         <h2>Preview</h2>
-        <CardPreview card={draft} abilities={abilityDrafts} />
-        <h3>Ability tray</h3>
+        <CardPreview card={draft} abilities={shownAbilities} />
+        {selected ? <div className="pill-row" style={{ marginTop: 8 }}><Badge tone="soft">{labelFor(CARD_TYPES, selected.cardType)}</Badge><Badge tone="soft">{labelFor(CARD_RARITIES, selected.cardRarity)}</Badge><Badge tone="soft">{labelFor(CARD_FACTIONS, selected.cardFaction)}</Badge></div> : null}
+        <h3 className="top-gap">Ability tray</h3>
         <div className="ability-list compact-scroll small">
           {abilities.map((ability) => <DragSource key={ability.abilityId} type="cardduel/ability" value={ability.abilityId} className="ability-chip"><strong>{ability.displayName}</strong><small>{ability.effects.length} effects · {lookups?.triggerKinds.find((t) => t.id === ability.triggerKind)?.displayName ?? ability.triggerKind}</small></DragSource>)}
         </div>
-      </Card>
-
-      <Card className="selected-panel">
-        <h2>Carta seleccionada</h2>
-        {selected ? <>
-          <div className="selected-card-detail">
-            <CardPreview card={selected} abilities={selected.abilities} />
-            <div>
-              <h3>{selected.displayName}</h3>
-              <p>{selected.description || "Sin descripción."}</p>
-              <div className="pill-row"><Badge tone="soft">{labelFor(CARD_TYPES, selected.cardType)}</Badge><Badge tone="soft">{labelFor(CARD_RARITIES, selected.cardRarity)}</Badge><Badge tone="soft">{labelFor(CARD_FACTIONS, selected.cardFaction)}</Badge></div>
-              <DropZone accept="cardduel/ability" onDropValue={attachToSelected} className="mini-drop">Arrastra aquí para anexar ability a esta carta</DropZone>
-              <div className="attached-list">{selected.abilities.map((ability) => <div key={ability.abilityId} className="attached-item"><span>{ability.displayName}</span><code>{ability.abilityId}</code></div>)}</div>
-              <Button variant="danger" onClick={() => deleteCard(selected.cardId)}>Eliminar carta</Button>
-            </div>
-          </div>
-        </> : <EmptyState title="Nada seleccionado" body="Elige una carta del catálogo para inspeccionarla o anexarle abilities." />}
       </Card>
     </div>
   </>;
